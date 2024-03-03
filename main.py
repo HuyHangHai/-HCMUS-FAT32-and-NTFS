@@ -20,6 +20,10 @@ if __name__ == "__main__":
 		
 		if Fat32.check(volume):
 			vol = Fat32(volume)
+		else :
+			print("ERROR: Unsupported volume type")
+			exit()
+		print(vol)
 
 
 
