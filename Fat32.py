@@ -26,6 +26,14 @@ class Fat32:
         except Exception as error:
             print(f"Error: {error}")
 
+    def __str__(self) -> str:
+        s = "Volume's name: " + self.volume_name
+        s += "\nVolume's info:\n"
+        items = self.boot_sector.items()
+        for i in items:
+            s += str(i[0]) + ': ' + str(i[1]) + '\n'
+        return s      
+
     def extract_boot_sector(self):
         self.boot_sector['Bytes Per Sector'] = int.from_bytes(self.boot_sector_data[0xB:0xD], 'little')
         self.boot_sector['Sectors Per Cluster'] = int.from_bytes(self.boot_sector_data[0xD:0xE], 'little')
