@@ -23,6 +23,9 @@ class RDET:
     # Handle entries here!
 
 
+class RDET:
+    def __init__(self, data):
+        self.data = data
 class Fat32_Main:
     def __init__(self, volume_name) -> None:
         self.volume_name = volume_name
@@ -55,15 +58,12 @@ class Fat32_Main:
             for _ in range(self.numbers_of_fats):
                 self.list_FAT.append(FAT(self.bin_raw_data.read(FAT_size)))
                 
-
-            #data+rdet
-            self.DET = {}
-
+            # Handle RDET 
             starting_cluster_index = self.boot_sector["Starting Cluster of RDET"]
             self.RDET = RDET(self.get_all_cluster_data(starting_cluster_index))
+
         except Exception as error:
             print(f"Error: {error}")
-
 
     @staticmethod
     def check(volume_name):
