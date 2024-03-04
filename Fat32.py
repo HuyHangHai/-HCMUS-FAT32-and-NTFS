@@ -1,20 +1,26 @@
-BOOTSECTORSIZE = 512
+BOOT_SECTOR_SIZE = 512
 
 class FAT:
     def __init__(self, data):
-        self.temp = data
-
-    def get_cluster_chain(self, index: int) -> 'list[int]':
+        self.raw_data = data
         self.elements = []
-        for i in range (0, len(self.temp), 4):
-            self.elements.append(int.from_bytes(self.temp[i:i+4], byteorder='little'))
-#dad
-        index_list = []
+
+    def get_cluster_chain(self, starting_index: int) -> 'list[int]':
+        for i in range (0, len(self.raw_data), 4):
+            self.elements.append(int.from_bytes(self.raw_data[i:i+4], 'little'))
+
+        cluster_list = []
         while True:
-            index_list.append(index)
-            index = self.elements[index]
-            if index == 0x0FFFFFFF or index == 0x0FFFFFF7:
-                return index_list
+            cluster_list.append(starting_index)
+            starting_index = self.elements[starting_index]
+            if starting_index == 0x0FFFFFFF or starting_index == 0x0FFFFFF7:
+                return cluster_list
+
+class RDET:
+    def __init__(self, data: bytes) -> None:
+        self.raw_data = data
+    
+    # Handle entries here!
 
 
 class Fat32_Main:
@@ -24,13 +30,12 @@ class Fat32_Main:
             self.bin_raw_data = open(rf"\\.\{self.volume_name}", 'rb')
             self.boot_sector = {}
 
-            self.boot_sector_data = self.bin_raw_data.read(BOOTSECTORSIZE)
+            self.boot_sector_data = self.bin_raw_data.read(BOOT_SECTOR_SIZE)
             self.extract_boot_sector()
             if self.boot_sector['FAT Name'] != b'FAT32   ':
                 raise Exception('NOT FAT32')
 
             # Important Info
-            #Reserved sectors
             self.boot_sector['FAT Name'] = self.boot_sector['FAT Name'].decode()
             self.bytes_per_sector = self.boot_sector['Bytes Per Sector']
             self.sectors_per_cluster = self.boot_sector['Sectors Per Cluster']
@@ -40,21 +45,25 @@ class Fat32_Main:
             self.sectors_per_fats = self.boot_sector['Sectors Per FAT']
             self.starting_cluster_of_rdet = self.boot_sector['Starting Cluster of RDET']
             self.starting_sector_of_data = self.boot_sector['Starting Sector of Data']
-            #FAT
-            FAT_size = self.BS * self.SF
+            
+            # Read FAT's info
+            # Move cursor in file to the 1st FAT
+            self.bin_raw_data.read(self.bytes_per_sector * (self.sectors_in_boot_sectors - 1))
+            FAT_size = self.bytes_per_sector * self.sectors_per_fats
 
-            self.FAT: list[FAT] = []
-            for _ in range(self.NF):
-                self.FAT.append(FAT(self.fd.read(FAT_size)))
+            self.list_FAT: list[FAT] = []
+            for _ in range(self.numbers_of_fats):
+                self.list_FAT.append(FAT(self.bin_raw_data.read(FAT_size)))
+                
 
             #data+rdet
             self.DET = {}
 
-            start = self.boot_sector["Starting Cluster of RDET"]
-            self.DET[start] = RDET(self.get_all_cluster_data(start))
-            self.RDET = self.DET[start]
+            starting_cluster_index = self.boot_sector["Starting Cluster of RDET"]
+            self.RDET = RDET(self.get_all_cluster_data(starting_cluster_index))
         except Exception as error:
             print(f"Error: {error}")
+
 
     @staticmethod
     def check(volume_name):
@@ -71,32 +80,36 @@ class Fat32_Main:
             exit()
 
     def __str__(self) -> str:
-        s = "Volume's name: " + self.volume_name
-        s += "\nVolume's info:\n"
+        result = "Volume's name: " + self.volume_name
+        result += "\nVolume's info:\n"
         items = self.boot_sector.items()
         for i in items:
-            s += str(i[0]) + ': ' + str(i[1]) + '\n'
-        return s
+            result += str(i[0]) + ': ' + str(i[1]) + '\n'
+        return result
 
     def extract_boot_sector(self):
         self.boot_sector['Bytes Per Sector'] = int.from_bytes(self.boot_sector_data[0xB:0xD], 'little')
         self.boot_sector['Sectors Per Cluster'] = int.from_bytes(self.boot_sector_data[0xD:0xE], 'little')
         self.boot_sector['Reserved Sectors'] = int.from_bytes(self.boot_sector_data[0xE:0x10], 'little')
         self.boot_sector['Number of FATs'] = int.from_bytes(self.boot_sector_data[0x10:0x11], 'little')
-        # self.boot_sector['Media Descriptor'] = self.boot_sector_data[0x15:0x16]
-        # self.boot_sector['Sectors Per Track'] = int.from_bytes(self.boot_sector_data[0x18:0x1A], 'little')
-        # self.boot_sector['No. Heads'] = int.from_bytes(self.boot_sector_data[0x1A:0x1C], 'little')
         self.boot_sector['Sectors In Volume'] = int.from_bytes(self.boot_sector_data[0x20:0x24], 'little')
         self.boot_sector['Sectors Per FAT'] = int.from_bytes(self.boot_sector_data[0x24:0x28], 'little')
-        # self.boot_sector['Flags'] = int.from_bytes(self.boot_sector_data[0x28:0x2A], 'little')
-        # self.boot_sector['FAT32 Version'] = self.boot_sector_data[0x2A:0x2C]
         self.boot_sector['Starting Cluster of RDET'] = int.from_bytes(self.boot_sector_data[0x2C:0x30], 'little')
-        # self.boot_sector['Sector Storing Sub-Info'] = self.boot_sector_data[0x30:0x32]
-        # self.boot_sector['Sector Storing Backup Boot Sector'] = self.boot_sector_data[0x32:0x34]
         self.boot_sector['FAT Name'] = self.boot_sector_data[0x52:0x5A]
         self.boot_sector['Starting Sector of Data'] = self.boot_sector['Reserved Sectors'] + self.boot_sector[
             'Number of FATs'] * self.boot_sector['Sectors Per FAT']
 
+    def convert_cluster_to_sector_index(self, index):
+        return self.sectors_in_boot_sectors + self.sectors_per_fats * self.numbers_of_fats + (index - 2) * self.sectors_per_cluster
+
+    def get_all_cluster_data(self, cluster_index):
+        cluster_list = self.list_FAT[0].get_cluster_chain(cluster_index)
+        data = b""
+        for i in cluster_list:
+            sector_index = self.convert_cluster_to_sector_index(i)
+            self.bin_raw_data.seek(sector_index * self.bytes_per_sector)
+            data += self.bin_raw_data.read(self.bytes_per_sector * self.sectors_per_cluster)
+        return data
 
 
 
