@@ -8,7 +8,7 @@ class FAT:
         self.elements = []
         for i in range (0, len(self.temp), 4):
             self.elements.append(int.from_bytes(self.temp[i:i+4], byteorder='little'))
-
+#dad
         index_list = []
         while True:
             index_list.append(index)
