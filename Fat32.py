@@ -22,10 +22,6 @@ class RDET:
     
     # Handle entries here!
 
-
-class RDET:
-    def __init__(self, data):
-        self.data = data
 class Fat32_Main:
     def __init__(self, volume_name) -> None:
         self.volume_name = volume_name
@@ -64,19 +60,6 @@ class Fat32_Main:
 
         except Exception as error:
             print(f"Error: {error}")
-
-    @staticmethod
-    def check(volume_name):
-        try:
-            boot_sector = open(rf'\\.\{volume_name}', 'rb')
-            boot_sector.read(1)  # Ensure file pointer correctly point to boot sector
-            boot_sector.seek(0x52)
-            fat_type = boot_sector.read(8)
-            if fat_type == b'FAT32   ':
-                return True
-            return False
-        except Exception as error:
-            print(f'Error: {error}')
             exit()
 
     def __str__(self) -> str:
@@ -86,7 +69,7 @@ class Fat32_Main:
         for i in items:
             result += str(i[0]) + ': ' + str(i[1]) + '\n'
         return result
-
+    
     def extract_boot_sector(self):
         self.boot_sector['Bytes Per Sector'] = int.from_bytes(self.boot_sector_data[0xB:0xD], 'little')
         self.boot_sector['Sectors Per Cluster'] = int.from_bytes(self.boot_sector_data[0xD:0xE], 'little')
@@ -110,6 +93,24 @@ class Fat32_Main:
             self.bin_raw_data.seek(sector_index * self.bytes_per_sector)
             data += self.bin_raw_data.read(self.bytes_per_sector * self.sectors_per_cluster)
         return data
+
+    @staticmethod
+    def check(volume_name):
+        try:
+            boot_sector = open(rf'\\.\{volume_name}', 'rb')
+            boot_sector.read(1)  # Ensure file pointer correctly point to boot sector
+            boot_sector.seek(0x52)
+            fat_type = boot_sector.read(8)
+            if fat_type == b'FAT32   ':
+                return True
+            return False
+        except Exception as error:
+            print(f'Error: {error}')
+            exit()
+
+    
+
+    
 
 
 
