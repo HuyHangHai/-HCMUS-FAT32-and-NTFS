@@ -1,7 +1,24 @@
 BOOTSECTORSIZE = 512
 
+class FAT:
+    def __init__(self, data):
+        self.temp = data
 
-class Fat32:
+    def get_cluster_chain(self, index: int) -> 'list[int]':
+        self.elements = []
+        for i in range (0, len(self.temp), 4):
+            self.elements.append(int.from_bytes(self.temp[i:i+4], byteorder='little'))
+
+        index_list = []
+        while True:
+            index_list.append(index)
+            index = self.elements[index]
+            if index == 0x0FFFFFFF or index == 0x0FFFFFF7:
+                return index_list
+
+
+
+class Fat32_main:
     def __init__(self, volume_name) -> None:
         self.volume_name = volume_name
         try:
@@ -14,6 +31,7 @@ class Fat32:
                 raise Exception('NOT FAT32')
 
             # Important Info
+            #Reserved sectors
             self.boot_sector['FAT Name'] = self.boot_sector['FAT Name'].decode()
             self.BS = self.boot_sector['Bytes Per Sector']
             self.SC = self.boot_sector['Sectors Per Cluster']
@@ -23,7 +41,19 @@ class Fat32:
             self.SF = self.boot_sector['Sectors Per FAT']
             self.SCOR = self.boot_sector['Starting Cluster of RDET']
             self.SSOD = self.boot_sector['Starting Sector of Data']
+            #FAT
+            FAT_size = self.BS * self.SF
 
+            self.FAT: list[FAT] = []
+            for _ in range(self.NF):
+                self.FAT.append(FAT(self.fd.read(FAT_size)))
+
+            #data+rdet
+            self.DET = {}
+
+            start = self.boot_sector["Starting Cluster of RDET"]
+            self.DET[start] = RDET(self.get_all_cluster_data(start))
+            self.RDET = self.DET[start]
         except Exception as error:
             print(f"Error: {error}")
 
@@ -41,8 +71,7 @@ class Fat32:
             print(f'Error: {error}')
             exit()
 
-    def __str__(self) -> s
-        tr:
+    def __str__(self) -> str:
         s = "Volume's name: " + self.volume_name
         s += "\nVolume's info:\n"
         items = self.boot_sector.items()
