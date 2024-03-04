@@ -8,15 +8,16 @@ class FAT:
         self.elements = []
         for i in range (0, len(self.temp), 4):
             self.elements.append(int.from_bytes(self.temp[i:i+4], byteorder='little'))
-#dad
-        index_list = []
+        cluster_chain = []
         while True:
-            index_list.append(index)
+            cluster_chain.append(index)
             index = self.elements[index]
             if index == 0x0FFFFFFF or index == 0x0FFFFFF7:
-                return index_list
+                return cluster_chain
 
-
+class RDET:
+    def __init__(self, ):
+        self.data
 class Fat32_Main:
     def __init__(self, volume_name) -> None:
         self.volume_name = volume_name
@@ -41,20 +42,29 @@ class Fat32_Main:
             self.starting_cluster_of_rdet = self.boot_sector['Starting Cluster of RDET']
             self.starting_sector_of_data = self.boot_sector['Starting Sector of Data']
             #FAT
-            FAT_size = self.BS * self.SF
+            FAT_size = self.bytes_per_sector * self.sectors_per_fats
 
             self.FAT: list[FAT] = []
-            for _ in range(self.NF):
+            for _ in range(self.numbers_of_fats):
                 self.FAT.append(FAT(self.fd.read(FAT_size)))
 
             #data+rdet
-            self.DET = {}
-
-            start = self.boot_sector["Starting Cluster of RDET"]
-            self.DET[start] = RDET(self.get_all_cluster_data(start))
-            self.RDET = self.DET[start]
+            start_cluster = self.boot_sector["Starting Cluster of RDET"]
+            self.RDET = self.DET[start_cluster]
         except Exception as error:
             print(f"Error: {error}")
+    def get_all_cluster_data(self, index: int) -> bytes:
+        # Lay fat[0] vi fat[1] la ban copy du tru cua fat[0]
+        cluster_chain = self.FAT[0].get_cluster_chain(index)
+        #khai bao data rong voi kieu du lieu bytes
+        data_in_bytes :bytes = ""
+        for i in cluster_chain:
+            offset = self.sectors_in_boot_sectors + self.sectors_per_fats * self.numbers_of_fats + (index - 2) * self.sectors_per_fats
+            # lay het data cua tat ca sector tai cluster i
+            self.fd.seek(offset * self.bytes_per_sector)
+            data_in_bytes += self.fd.read(self.bytes_per_sector * self.sectors_per_cluster)
+        return data_in_bytes
+
 
     @staticmethod
     def check(volume_name):
@@ -96,7 +106,10 @@ class Fat32_Main:
         self.boot_sector['FAT Name'] = self.boot_sector_data[0x52:0x5A]
         self.boot_sector['Starting Sector of Data'] = self.boot_sector['Reserved Sectors'] + self.boot_sector[
             'Number of FATs'] * self.boot_sector['Sectors Per FAT']
-
+    def __del__(self):
+        if getattr(self, "fd", None):
+            print("Closing Volume...")
+            self.fd.close()
 
 
 
