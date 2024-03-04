@@ -1,7 +1,7 @@
 BOOTSECTORSIZE = 512
 
 
-class Fat32:
+class Fat32_Main:
     def __init__(self, volume_name) -> None:
         self.volume_name = volume_name
         try:
@@ -15,14 +15,14 @@ class Fat32:
 
             # Important Info
             self.boot_sector['FAT Name'] = self.boot_sector['FAT Name'].decode()
-            self.BS = self.boot_sector['Bytes Per Sector']
-            self.SC = self.boot_sector['Sectors Per Cluster']
-            self.SB = self.boot_sector['Sectors in Boot Sector']
-            self.NF = self.boot_sector["FAT Numbers"]
-            self.SV = self.boot_sector['Sectors In Volume']
-            self.SF = self.boot_sector['Sectors Per FAT']
-            self.SCOR = self.boot_sector['Starting Cluster of RDET']
-            self.SSOD = self.boot_sector['Starting Sector of Data']
+            self.bytes_per_sector = self.boot_sector['Bytes Per Sector']
+            self.sectors_per_cluster = self.boot_sector['Sectors Per Cluster']
+            self.sectors_in_boot_sectors = self.boot_sector['Reserved Sectors']
+            self.numbers_of_fats = self.boot_sector["Number of FATs"]
+            self.sectors_in_volumes = self.boot_sector['Sectors In Volume']
+            self.sectors_per_fats = self.boot_sector['Sectors Per FAT']
+            self.starting_cluster_of_rdet = self.boot_sector['Starting Cluster of RDET']
+            self.starting_sector_of_data = self.boot_sector['Starting Sector of Data']
 
         except Exception as error:
             print(f"Error: {error}")
@@ -41,8 +41,7 @@ class Fat32:
             print(f'Error: {error}')
             exit()
 
-    def __str__(self) -> s
-        tr:
+    def __str__(self) -> str:
         s = "Volume's name: " + self.volume_name
         s += "\nVolume's info:\n"
         items = self.boot_sector.items()
@@ -53,8 +52,8 @@ class Fat32:
     def extract_boot_sector(self):
         self.boot_sector['Bytes Per Sector'] = int.from_bytes(self.boot_sector_data[0xB:0xD], 'little')
         self.boot_sector['Sectors Per Cluster'] = int.from_bytes(self.boot_sector_data[0xD:0xE], 'little')
-        self.boot_sector['Sectors in Boot Sector'] = int.from_bytes(self.boot_sector_data[0xE:0x10], 'little')
-        self.boot_sector['FAT Numbers'] = int.from_bytes(self.boot_sector_data[0x10:0x11], 'little')
+        self.boot_sector['Reserved Sectors'] = int.from_bytes(self.boot_sector_data[0xE:0x10], 'little')
+        self.boot_sector['Number of FATs'] = int.from_bytes(self.boot_sector_data[0x10:0x11], 'little')
         # self.boot_sector['Media Descriptor'] = self.boot_sector_data[0x15:0x16]
         # self.boot_sector['Sectors Per Track'] = int.from_bytes(self.boot_sector_data[0x18:0x1A], 'little')
         # self.boot_sector['No. Heads'] = int.from_bytes(self.boot_sector_data[0x1A:0x1C], 'little')
@@ -66,8 +65,8 @@ class Fat32:
         # self.boot_sector['Sector Storing Sub-Info'] = self.boot_sector_data[0x30:0x32]
         # self.boot_sector['Sector Storing Backup Boot Sector'] = self.boot_sector_data[0x32:0x34]
         self.boot_sector['FAT Name'] = self.boot_sector_data[0x52:0x5A]
-        self.boot_sector['Starting Sector of Data'] = self.boot_sector['Sectors in Boot Sector'] + self.boot_sector[
-            'FAT Numbers'] * self.boot_sector['Sectors Per FAT']
+        self.boot_sector['Starting Sector of Data'] = self.boot_sector['Reserved Sectors'] + self.boot_sector[
+            'Number of FATs'] * self.boot_sector['Sectors Per FAT']
 
 
 

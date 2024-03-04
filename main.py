@@ -1,4 +1,4 @@
-from Fat32 import Fat32
+from Fat32 import Fat32_Main
 import os
 
 if __name__ == "__main__":
@@ -18,8 +18,8 @@ if __name__ == "__main__":
 		
 		volume = volumes[choice - 1]
 		
-		if Fat32.check(volume):
-			vol = Fat32(volume)
+		if Fat32_Main.check(volume):
+			vol = Fat32_Main(volume)
 		else :
 			print("ERROR: Unsupported volume type")
 			exit()
