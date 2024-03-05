@@ -23,7 +23,7 @@ class Attribute(Flag):
     READ_ONLY = auto()
     HIDDEN = auto()
     SYSTEM = auto()
-    VOLLABLE = auto()
+    VOL_LABLE = auto()
     DIRECTORY = auto()
     ARCHIVE = auto()
 
@@ -39,7 +39,7 @@ class RDETentry:
         self.is_subentry = self.flag == b'\x0f'
         self.is_deleted = self.raw_data[0] == 0xe5
         self.is_empty = self.raw_data[0] == 0x00
-        self.is_label = Attribute.VOLLABLE in Attribute(int.from_bytes(self.flag, byteorder='little'))
+        self.is_label = Attribute.VOL_LABLE in Attribute(int.from_bytes(self.flag, byteorder='little'))
 
         if not self.is_subentry:
             self.name = self.raw_data[:0x8]
