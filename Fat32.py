@@ -1,4 +1,8 @@
+from enum import Flag, auto
+from datetime import datetime
+from itertools import chain
 BOOT_SECTOR_SIZE = 512
+
 
 class FAT:
     def __init__(self, data):
@@ -15,6 +19,92 @@ class FAT:
             starting_index = self.elements[starting_index]
             if starting_index == 0x0FFFFFFF or starting_index == 0x0FFFFFF7:
                 return cluster_list
+class Attribute(Flag):
+    READ_ONLY = auto()
+    HIDDEN = auto()
+    SYSTEM = auto()
+    VOLLABLE = auto()
+    DIRECTORY = auto()
+    ARCHIVE = auto()
+
+class RDETentry:
+    def __init__(self, data) -> None:
+        self.raw_data = data
+        self.parse_entry()
+
+    def parse_entry(self):
+        self.flag = self.raw_data[0xB:0xC]
+        #so sanh flag co bang \xof ko roi gan true false vo is_subentry
+        #cac dong con lai lam tuong tu
+        self.is_subentry = self.flag == b'\x0f'
+        self.is_deleted = self.raw_data[0] == 0xe5
+        self.is_empty = self.raw_data[0] == 0x00
+        self.is_label = Attribute.VOLLABLE in Attribute(int.from_bytes(self.flag, byteorder='little'))
+
+        if not self.is_subentry:
+            self.name = self.raw_data[:0x8]
+            self.ext = self.raw_data[0x8:0xB]
+
+            if self.is_deleted or self.is_empty:
+                self.name = ""
+                return
+
+            self.attr = Attribute(int.from_bytes(self.flag, byteorder='little'))
+            self.set_date_time()
+            self.start_cluster, self.size = self.extract_start_cluster_size()
+        else:
+            self.index = self.raw_data[0]
+            self.name = self.extract_long_name()
+
+    def set_date_time(self):
+        self.time_created_raw = int.from_bytes(self.raw_data[0xD:0x10], byteorder='little')
+        self.date_created_raw = int.from_bytes(self.raw_data[0x10:0x12], byteorder='little')
+        self.last_accessed_raw = int.from_bytes(self.raw_data[0x12:0x14], byteorder='little')
+        self.time_updated_raw = int.from_bytes(self.raw_data[0x16:0x18], byteorder='little')
+        self.date_updated_raw = int.from_bytes(self.raw_data[0x18:0x1A], byteorder='little')
+
+        self.date_created = self.extract_datetime(self.time_created_raw, self.date_created_raw)
+        self.last_accessed = self.extract_datetime(self.last_accessed_raw, None)
+        self.date_updated = self.extract_datetime(self.time_updated_raw, self.date_updated_raw)
+
+    def extract_datetime(self, time_raw, date_raw):
+        if time_raw is None:
+            return None
+        year = 1980 + ((date_raw & 0b1111111000000000) >> 9)
+        month = (date_raw & 0b0000000111100000) >> 5
+        day = date_raw & 0b0000000000011111
+        if date_raw is None:
+            return datetime(year, month, day)
+
+        hours = (time_raw & 0b1111100000000000) >> 11
+        minutes = (time_raw & 0b0000011111100000) >> 5
+        seconds = (time_raw & 0b0000000000011111) * 2
+        return datetime(year, month, day, hours, minutes, seconds)
+
+    def extract_start_cluster_size(self):
+        start_cluster_bytes = self.raw_data[0x14:0x16][::-1] + self.raw_data[0x1A:0x1C][::-1]
+        start_cluster = int.from_bytes(start_cluster_bytes, byteorder='big')
+        size = int.from_bytes(self.raw_data[0x1C:0x20], byteorder='little')
+        return start_cluster, size
+
+    def extract_long_name(self):
+        name = b""
+        for i in chain(range(0x1, 0xB), range(0xE, 0x1A), range(0x1C, 0x20)):
+            name += int.to_bytes(self.raw_data[i], 1, byteorder='little')
+            if name.endswith(b"\xff\xff"):
+                name = name[:-2]
+                break
+        return name.decode('utf-16le').strip('\x00')
+
+    def is_active_entry(self) -> bool:
+        return not (
+                    self.is_empty or self.is_subentry or self.is_deleted or self.is_label or Attribute.SYSTEM in self.attr)
+
+    def is_directory(self) -> bool:
+        return Attribute.DIRECTORY in self.attr
+
+    def is_archive(self) -> bool:
+        return Attribute.ARCHIVE in self.attr
 
 class RDET:
     def __init__(self, data: bytes) -> None:
