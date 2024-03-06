@@ -30,6 +30,7 @@ class Attribute(Flag):
 class RDETentry:
     def __init__(self, data) -> None:
         self.raw_data = data
+        self.entry_name = ''
         self.parse_entry()
 
     def parse_entry(self):
@@ -109,9 +110,33 @@ class RDETentry:
 class RDET:
     def __init__(self, data: bytes) -> None:
         self.raw_data = data
-    
-    # Handle entries here!
+        self.entries: list[RDETentry] = []
+        self.entries.append(RDETentry(self.raw_data[0: 32]))
+        self.entries = self.get_full_entry_name()
+        
+        print(self.entries[-1].entry_name)
 
+    def get_full_entry_name(self) -> list[RDETentry]:
+        entry_name = ''
+        entries: list[RDETentry] = []
+        for i in range(0, len(self.raw_data), 32):
+            entries.append(RDETentry(self.raw_data[i: i + 32]))
+            if entries[-1].is_empty or entries[-1].is_deleted:
+                entry_name = ''
+                continue
+            elif entries[-1].is_subentry:
+                entry_name += entries[-1].name
+            
+            if entry_name != '':
+                entries[-1].entry_name = entry_name
+            else:
+                extension = entries[-1].ext.strip().decode()
+                if extension != '':
+                    entries[-1].entry_name = entries[-1].name + '.' + extension
+                else:
+                    entries[-1].entry_name = entries[-1].name
+                entry_name = ''
+        return entries
 class Fat32_Main:
     def __init__(self, volume_name) -> None:
         self.volume_name = volume_name
