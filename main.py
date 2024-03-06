@@ -1,5 +1,6 @@
 from Fat32 import Fat32_Main
 import os
+import re
 
 if __name__ == "__main__":
 		volumes = [chr(x) + ':' for x in range(65, 91) if os.path.exists(chr(x) + ':')]
@@ -18,14 +19,12 @@ if __name__ == "__main__":
 		
 		volume = volumes[choice - 1]
 		
-		if Fat32_Main.check(volume):
+		if Fat32_Main.isFAT32(volume):
 			vol = Fat32_Main(volume)
 		else :
 			print("ERROR: Unsupported volume type")
 			exit()
-		print(vol)
-
-
+		
 
 
 
