@@ -77,12 +77,9 @@ class RDETentry:
         hours = (time_raw & 0b111110000000000000000000) >> 19
         minutes = (time_raw & 0b000001111110000000000000) >> 13
         seconds = (time_raw & 0b000000000001111110000000) >> 7
-        ms = (self.time_created_raw & 0b000000000000000001111111)
-        print('date:', hours, ' ', minutes, ' ', seconds)
         year = 1980 + ((date_raw & 0b1111111000000000) >> 9)
         month = (date_raw & 0b0000000111100000) >> 5
         day = date_raw & 0b0000000000011111
-        print('daytime:', year, ' ', month, ' ', day)
         if date_raw is None:
             return datetime(year, month, day)
         return datetime(year, month, day, hours, minutes, seconds)
