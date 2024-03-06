@@ -1,6 +1,7 @@
 from enum import Flag, auto
 from datetime import datetime
 from itertools import chain
+import re
 BOOT_SECTOR_SIZE = 512
 
 
@@ -78,11 +79,9 @@ class RDETentry:
         minutes = (time_raw & 0b000001111110000000000000) >> 13
         seconds = (time_raw & 0b000000000001111110000000) >> 7
         ms = (self.time_created_raw & 0b000000000000000001111111)
-        print('date:', hours, ' ', minutes, ' ', seconds)
         year = 1980 + ((date_raw & 0b1111111000000000) >> 9)
         month = (date_raw & 0b0000000111100000) >> 5
         day = date_raw & 0b0000000000011111
-        print('daytime:', year, ' ', month, ' ', day)
         if date_raw is None:
             return datetime(year, month, day)
         return datetime(year, month, day, hours, minutes, seconds)
@@ -118,8 +117,6 @@ class RDET:
         self.entries: list[RDETentry] = []
         self.entries = self.get_full_entry_name()
         
-        print(self.entries[-1].entry_name)
-
     def get_full_entry_name(self) -> list[RDETentry]:
         entry_name = ''
         entries: list[RDETentry] = []
@@ -129,7 +126,8 @@ class RDET:
                 entry_name = ''
                 continue
             elif entries[-1].is_subentry:
-                entry_name += entries[-1].name
+                entry_name = entries[-1].name + entry_name
+                continue
             
             if entry_name != '':
                 entries[-1].entry_name = entry_name
@@ -151,14 +149,13 @@ class RDET:
 
     def find_entry(self, name) -> RDETentry:
         for i in range(len(self.entries)):
-            if self.entries[i].is_active_entry() and self.entries[i].long_name.lower() == name.lower():
+            if self.entries[i].is_active_entry() and self.entries[i].entry_name.lower() == name.lower():
                 return self.entries[i]
         return None
-
-
 class Fat32_Main:
     def __init__(self, volume_name) -> None:
         self.volume_name = volume_name
+        self.cwd = [self.volume_name]
         try:
             self.bin_raw_data = open(rf"\\.\{self.volume_name}", 'rb')
             self.boot_sector = {}
@@ -193,6 +190,7 @@ class Fat32_Main:
             self.RDET = RDET(self.get_all_cluster_data(starting_cluster_index))
             self.DET = {}
             self.DET[starting_cluster_index] = self.RDET
+
         except Exception as error:
             print(f"Error: {error}")
             exit()
@@ -205,6 +203,11 @@ class Fat32_Main:
             result += str(i[0]) + ': ' + str(i[1]) + '\n'
         return result
     
+    def __del__(self):
+        if getattr(self, "bin_raw_data", None):
+            print("Closing Volume...")
+            self.bin_raw_data.close()
+
     def extract_boot_sector(self):
         self.boot_sector['Bytes Per Sector'] = int.from_bytes(self.boot_sector_data[0xB:0xD], 'little')
         self.boot_sector['Sectors Per Cluster'] = int.from_bytes(self.boot_sector_data[0xD:0xE], 'little')
@@ -218,7 +221,6 @@ class Fat32_Main:
 
     def convert_cluster_to_sector_index(self, index):
         return self.sectors_in_boot_sectors + self.sectors_per_fats * self.numbers_of_fats + (index - 2) * self.sectors_per_cluster
-#return self.SB + self.SF * self.NF + (index - 2) * self.SC
     def get_all_cluster_data(self, cluster_index):
         cluster_list = self.list_FAT[0].get_cluster_chain(cluster_index)
         data = b""
@@ -229,7 +231,7 @@ class Fat32_Main:
         return data
 
     @staticmethod
-    def check(volume_name):
+    def isFAT32(volume_name):
         try:
             boot_sector = open(rf'\\.\{volume_name}', 'rb')
             boot_sector.read(1)  # Ensure file pointer correctly point to boot sector
@@ -242,9 +244,65 @@ class Fat32_Main:
             print(f'Error: {error}')
             exit()
 
+    def parsePath(self, path):
+        dirs = re.sub(r"[/\\]+", r"\\", path).strip("\\").split("\\")
+        return dirs
     
+    def visitDirectory(self, path) -> RDET:
+        if path == "":
+            raise Exception("Require a directory!")
+        path = self.parsePath(path)
 
+        if path[0] == self.volume_name:
+            cdet = self.DET[self.boot_sector["Starting Cluster of RDET"]]
+            path.pop(0)
+        else:
+            cdet = self.RDET
+
+        for dir in path:
+            entry = cdet.find_entry(dir)
+            if entry is None:
+                raise Exception("Directory not found!")
+            if entry.is_directory():
+                if entry.start_cluster == 0:
+                    cdet = self.DET[self.boot_sector["Starting Cluster of RDET"]]
+                    continue
+                if entry.start_cluster in self.DET:
+                    cdet = self.DET[entry.start_cluster]
+                    continue
+                self.DET[entry.start_cluster] = RDET(self.get_all_cluster_data(entry.start_cluster))
+                cdet = self.DET[entry.start_cluster] 
+            else:
+                raise Exception("Not a directory")
+        return cdet
     
+    def getCWD(self):
+        if len(self.cwd) == 1:
+            return self.cwd[0] + "\\"
+        return "\\".join(self.cwd)
+
+    def getDirectory(self, path = ""):
+        try:
+            if path != "":
+                cdet = self.visitDirectory(path)
+                entry_list = cdet.get_active_entries()
+            else:
+                entry_list = self.RDET.get_active_entries()
+            ret = []
+            for entry in entry_list:
+                obj = {}
+                obj["Flags"] = entry.attr.value
+                obj["Date Modified"] = entry.date_updated
+                obj["Size"] = entry.size
+                obj["Name"] = entry.entry_name
+                if entry.start_cluster == 0:
+                    obj["Sector"] = (entry.start_cluster + 2) * self.sectors_per_cluster
+                else:
+                    obj["Sector"] = entry.start_cluster * self.sectors_per_cluster
+                    ret.append(obj)
+            return ret
+        except Exception as error:
+            raise(error)
 
 
 
