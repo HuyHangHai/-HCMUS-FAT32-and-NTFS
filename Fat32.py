@@ -306,5 +306,83 @@ class Fat32_Main:
         except Exception as error:
             raise(error)
 
+    def changeDirectory(self, path=""):
+        if path == "":
+            raise Exception("Path to directory is required!")
+        try:
+            cdet = self.visitDirectory(path)
+            self.RDET = cdet
+
+            dirs = self.parsePath(path)
+            if dirs[0] == self.volume_name:
+                self.cwd.clear()
+                self.cwd.append(self.volume_name)
+                dirs.pop(0)
+            for d in dirs:
+                if d == "..":
+                    self.cwd.pop()
+                elif d != ".":
+                    self.cwd.append(d)
+        except Exception as e:
+            raise e
+
+    def getText(self, path: str) -> str:
+        path_parts = self.parsePath(path)
+
+        if len(path_parts) > 1:
+            volume_name = path_parts[-1]
+            dir_path = "\\".join(path_parts[:-1])
+            cdet = self.visitDirectory(dir_path)
+            entry = cdet.find_entry(volume_name)
+        else:
+            entry = self.RDET.find_entry(path_parts[0])
+
+        if entry is None:
+            raise Exception("File doesn't exist")
+        if entry.is_directory():
+            raise Exception("Is a directory")
+
+        index_list = self.list_FAT[0].get_cluster_chain(entry.start_cluster)
+        data = ""
+        size_left = entry.size
+
+        for i in index_list:
+            if size_left <= 0:
+                break
+            off = self.convert_cluster_to_sector_index(i)
+            self.bin_raw_data.seek(off * self.bytes_per_sector)
+            raw_data = self.bin_raw_data.read(min(self.sectors_per_cluster * self.bytes_per_sector, size_left))
+            size_left -= self.sectors_per_cluster * self.bytes_per_sector
+
+            try:
+                data += raw_data.decode()
+            except UnicodeDecodeError as e:
+                raise Exception("Not a text file, please use appropriate software to open.")
+            except Exception as e:
+                raise e
+
+        return data
+
+    def getFileContent(self, path: str) -> bytes:
+        path_parts = self.parsePath(path)
+
+        if len(path_parts) > 1:
+            volume_name = path_parts[-1]
+            dir_path = "\\".join(path_parts[:-1])
+            cdet = self.visitDirectory(dir_path)
+            entry = cdet.find_entry(volume_name)
+        else:
+            entry = self.RDET.find_entry(path_parts[0])
+
+        if entry is None:
+            raise Exception("File doesn't exist")
+        if entry.is_directory():
+            raise Exception("Is a directory")
+
+        data = self.get_all_cluster_data(entry.start_cluster)[:entry.size]
+        return data
+
+
+
 
 
